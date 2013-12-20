@@ -158,7 +158,7 @@ class Addvert extends Module
                 array('property' => 'og:description',   'content' => $product->description_short),
                 array('name' => 'addvert:type',         'content' => self::ADDVERT_TYPE),
                 array('name' => 'addvert:ecommerce_id', 'content' => $this->ecommerceId),
-                array('name' => 'addvert:price',        'content' => number_format($product->getPublicPrice(), 2)),
+                array('name' => 'addvert:price',        'content' => number_format($product->getPublicPrice(), 2, '.', '')),
             );
 
             $image = Product::getCover($product->id);
