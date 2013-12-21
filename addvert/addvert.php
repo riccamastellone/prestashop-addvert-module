@@ -155,7 +155,7 @@ class Addvert extends Module
             $metas = array(
                 array('property' => 'og:url',           'content' => $product->getLink()),
                 array('property' => 'og:title',         'content' => $product->name),
-                array('property' => 'og:description',   'content' => $product->description_short),
+                array('property' => 'og:description',   'content' => strip_tags($product->description_short)),
                 array('name' => 'addvert:type',         'content' => self::ADDVERT_TYPE),
                 array('name' => 'addvert:ecommerce_id', 'content' => $this->ecommerceId),
                 array('name' => 'addvert:price',        'content' => number_format($product->getPublicPrice(), 2, '.', '')),
