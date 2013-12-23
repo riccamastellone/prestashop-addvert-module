@@ -46,7 +46,7 @@ class Addvert extends Module
         parent::__construct();
 
         $this->displayName = $this->l('Addvert integration');
-        $this->description = $this->l('Addvert integration.');
+        $this->description = $this->l('PrestaShop Module to integrate Addvert affiliation platform.');
 
         $this->confirmUninstall = $this->l('Are you sure you want to uninstall?');
 
