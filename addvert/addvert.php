@@ -2,7 +2,7 @@
 /**
  * @package  Addvert
  * @author   Gennaro Vietri <gennaro.vietri@gmail.com>
-*/
+ */
 if (!defined('_PS_VERSION_'))
     exit;
 
@@ -27,7 +27,7 @@ class Addvert extends Module
         $product = null;
 
         if ($id_product = (int)Tools::getValue('id_product')) {
-            $product = new Product($id_product, true, $this->context->language->id, $this->context->shop->id);
+            $product = new Product($id_product, true, $this->context->language->id);
 
             if (!Validate::isLoadedObject($product)) $product = null;
         }
@@ -55,14 +55,14 @@ class Addvert extends Module
 
     public function install()
     {
-        Configuration::updateGlobalValue('ADDVERT_ECOMMERCE_ID', $this->ecommerceId);
-        Configuration::updateGlobalValue('ADDVERT_SECRET_KEY', $this->secretKey);
-        Configuration::updateGlobalValue('ADDVERT_BUTTON_LAYOUT', $this->buttonLayout);
+        Configuration::updateValue('ADDVERT_ECOMMERCE_ID', $this->ecommerceId);
+        Configuration::updateValue('ADDVERT_SECRET_KEY', $this->secretKey);
+        Configuration::updateValue('ADDVERT_BUTTON_LAYOUT', $this->buttonLayout);
 
         return (parent::install()
             && $this->registerHook('header')
-            && $this->registerHook('displayProductButtons')
-            && $this->registerHook('displayOrderConfirmation'));
+            && $this->registerHook('productActions')
+            && $this->registerHook('orderConfirmation'));
     }
 
     public function uninstall()
@@ -78,6 +78,9 @@ class Addvert extends Module
         $this->ecommerceId = htmlentities(Configuration::get('ADDVERT_ECOMMERCE_ID'), ENT_QUOTES, 'UTF-8');
         $this->secretKey = htmlentities(Configuration::get('ADDVERT_SECRET_KEY'), ENT_QUOTES, 'UTF-8');
         $this->buttonLayout = htmlentities(Configuration::get('ADDVERT_BUTTON_LAYOUT'), ENT_QUOTES, 'UTF-8');
+
+        // Retrocompatibility
+        $this->initContext();
     }
 
     public function postProcess()
@@ -158,16 +161,15 @@ class Addvert extends Module
                 array('property' => 'og:description',   'content' => strip_tags($product->description_short)),
                 array('name' => 'addvert:type',         'content' => self::ADDVERT_TYPE),
                 array('name' => 'addvert:ecommerce_id', 'content' => $this->ecommerceId),
-                array('name' => 'addvert:price',        'content' => number_format($product->getPublicPrice(), 2, '.', '')),
+                array('name' => 'addvert:price',        'content' => number_format($product->getPrice(), 2, '.', '')),
             );
 
             $image = Product::getCover($product->id);
             if (isset($image['id_image'])) {
-                $metas[] = array('property' => 'og:image', 'content' => $this->context->link->getImageLink($product->link_rewrite, $image['id_image'], 'thickbox_default'));
+                $metas[] = array('property' => 'og:image', 'content' => $this->context->link->getImageLink($product->link_rewrite, $image['id_image'], 'home_default'));
             }
 
-            $categoryId = $product->getDefaultCategory();
-            if ($categoryId) {
+            if ($categoryId = $this->getDefaultCategory($product)) {
                 $category = new Category($categoryId);
                 $metas[] = array('name' => 'addvert:category', 'content' => $category->getName());
             }
@@ -188,7 +190,7 @@ class Addvert extends Module
         return $metaHtml;
     }
 
-    public function hookDisplayHeader()
+    public function hookHeader()
     {
         if ($this->_isProductPage()) {
             return $this->getMetaHtml();
@@ -211,7 +213,7 @@ class Addvert extends Module
         ';
     }
 
-    public function hookDisplayProductButtons()
+    public function hookProductActions()
     {
         return $this->getButtonHtml();
     }
@@ -224,7 +226,7 @@ class Addvert extends Module
         return '<script src="' . self::SCRIPT_BASE_URL . '/api/order/send_total?key=' . $orderKey . '"></script>';
     }
 
-    public function hookDisplayOrderConfirmation($params)
+    public function hookOrderConfirmation($params)
     {
         return $this->getOrderTrakingHtml($params['objOrder']->id, $params['total_to_pay']);
     }
@@ -261,6 +263,34 @@ class Addvert extends Module
 
     protected function _isProductPage()
     {
-        return (Dispatcher::getInstance()->getController() == "product");
+        return ((int)Tools::getValue('id_product') > 0);
+    }
+
+    private function initContext()
+    {
+        if (class_exists('Context')) {
+            $this->context = Context::getContext();
+        } else {
+            global $smarty, $cookie, $link;
+            $this->context = new StdClass();
+            $this->context->smarty = $smarty;
+            $this->context->cookie = $cookie;
+            $this->context->link = $link;
+            $this->context->language = new Language($cookie->id_lang);
+        }
+    }
+
+    public function getDefaultCategory($product)
+    {
+        if (method_exists($product, 'getDefaultCategory')) {
+            return $product->getDefaultCategory();
+        } else {
+            $default_category = Db::getInstance()->getValue('
+                SELECT p.`id_category_default`
+                FROM `'._DB_PREFIX_.'product` p
+                WHERE p.`id_product` = '.(int)$product->id);
+
+            return $default_category;
+        }
     }
 }
