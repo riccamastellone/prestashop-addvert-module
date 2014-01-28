@@ -166,7 +166,7 @@ class Addvert extends Module
 
             $image = Product::getCover($product->id);
             if (isset($image['id_image'])) {
-                $metas[] = array('property' => 'og:image', 'content' => $this->context->link->getImageLink($product->link_rewrite, $image['id_image']));
+                $metas[] = array('property' => 'og:image', 'content' => $this->context->link->getImageLink($product->link_rewrite, $product->id."-".$image['id_image']));
             }
 
             if ($categoryId = $this->getDefaultCategory($product)) {
