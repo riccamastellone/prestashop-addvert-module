@@ -221,7 +221,7 @@ class Addvert extends Module
     public function getOrderTrakingHtml($orderId, $orderTotal)
     {
         $url = sprintf(self::SCRIPT_BASE_URL . '/api/order/prep_total?ecommerce_id=%s&secret=%s&tracking_id=%s&total=%s', $this->ecommerceId, $this->secretKey, $orderId, $orderTotal);
-        $orderKey = file_get_contents($url);
+        $orderKey = Tools::file_get_contents($url);
 
         return '<script src="' . self::SCRIPT_BASE_URL . '/api/order/send_total?key=' . $orderKey . '"></script>';
     }
@@ -240,7 +240,7 @@ class Addvert extends Module
             }
         } else {
             // process single item
-            if (strlen($data)) {
+            if (Tools::strlen($data)) {
                 if (is_array($allowedTags) and !empty($allowedTags)) {
                     $allowed = implode('|', $allowedTags);
                     $result = preg_replace('/<([\/\s\r\n]*)(' . $allowed . ')([\/\s\r\n]*)>/si', '##$1$2$3##', $data);
