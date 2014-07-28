@@ -155,6 +155,9 @@ class Addvert extends Module
         if ($this->_isProductPage()) {
             $product = $this->_getProduct();
 
+            if(is_null($product) || $product == false)
+                return $metaHtml;
+
             $metas = array(
                 array('property' => 'og:url',           'content' => $product->getLink()),
                 array('property' => 'og:title',         'content' => $product->name),
