@@ -39,7 +39,7 @@ class Addvert extends Module
     {
         $this->name = 'addvert';
         $this->tab = 'advertising_marketing';
-        $this->version = '1.0';
+        $this->version = '1.1';
         $this->author = 'Gennaro Vietri';
         $this->need_instance = 0;
 
@@ -169,7 +169,12 @@ class Addvert extends Module
 
             $image = Product::getCover($product->id);
             if (isset($image['id_image'])) {
-                $metas[] = array('property' => 'og:image', 'content' => $this->context->link->getImageLink($product->link_rewrite, $product->id."-".$image['id_image']));
+                $img = $this->context->link->getImageLink($product->link_rewrite, "$product->id-$image[id_image]");
+                // patch prestashop 1.3.4 (outletbicocca)
+                if($img[0] === '/')
+                    $img = _PS_BASE_URL_ . $img;
+
+                $metas[] = array('property' => 'og:image', 'content' => $img);
             }
 
             if ($categoryId = $this->getDefaultCategory($product)) {
@@ -271,15 +276,17 @@ class Addvert extends Module
 
     private function initContext()
     {
-        if (class_exists('Context')) {
-            $this->context = Context::getContext();
-        } else {
-            global $smarty, $cookie, $link;
+        global $smarty, $cookie, $link;
+
+        if ( !empty($link) ) {
             $this->context = new StdClass();
             $this->context->smarty = $smarty;
             $this->context->cookie = $cookie;
             $this->context->link = $link;
             $this->context->language = new Language($cookie->id_lang);
+        }
+        elseif( empty($this->context) ) {
+            $this->context = Context::getContext();
         }
     }
 
