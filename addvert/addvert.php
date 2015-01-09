@@ -64,9 +64,6 @@ class Addvert extends Module
 
     public function install()
     {
-        if (!function_exists('curl_init'))
-            throw new Exception('Addvert needs the CURL PHP extension.');
-
         Configuration::updateValue('ADDVERT_ECOMMERCE_ID', $this->ecommerceId);
         Configuration::updateValue('ADDVERT_SECRET_KEY', $this->secretKey);
         Configuration::updateValue('ADDVERT_BUTTON_LAYOUT', $this->buttonLayout);
@@ -384,17 +381,21 @@ class Addvert extends Module
             'ecommerce_id='. $this->ecommerceId,
         ));
         
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        if( function_exists('curl_init') ) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
-        $resp = curl_exec($ch);
-        if($resp === false)
-            $this->log('cURL error #'. curl_errno($ch)."\n". curl_error($ch));
-        else
-            $this->log("cURL response:\n$resp");
+            $resp = curl_exec($ch);
+            if($resp === false)
+                $this->log('cURL error #'. curl_errno($ch)."\n". curl_error($ch));
+            curl_close($ch);
+        }
+        else {
+            $resp = file_get_contents($url);
+        }
 
-        curl_close($ch);
+        $this->log("Response:\n$resp");
     }
 
     protected function get_token($order_id) {
