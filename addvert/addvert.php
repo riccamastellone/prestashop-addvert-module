@@ -2,13 +2,22 @@
 /**
  * @package  Addvert
  * @author   Gennaro Vietri <gennaro.vietri@gmail.com>
+ * @author   Pelligra Salvatore <s.pelligra@addvert.it>
  */
 if (!defined('_PS_VERSION_'))
     exit;
 
+if( !defined('_PS_USE_SQL_SLAVE_') )
+    define('_PS_USE_SQL_SLAVE_', 0);
+
+require __DIR__ .'/logger.php';
+
 class Addvert extends Module
 {
-    const SCRIPT_BASE_URL = 'http://addvert.it';
+    const TOKEN = 'addvert_token';
+    const TABLE = 'addvert_order_token';
+    const SCRIPT_BASE_URL = 'https://addvert.it';
+    const ADDVERT_API = 'https://addvert.it/api/order/send_order';
 
     public $ecommerceId;
 
@@ -39,8 +48,8 @@ class Addvert extends Module
     {
         $this->name = 'addvert';
         $this->tab = 'advertising_marketing';
-        $this->version = '1.1';
-        $this->author = 'Gennaro Vietri';
+        $this->version = '1.2';
+        $this->author = 'Addvert.it';
         $this->need_instance = 0;
 
         parent::__construct();
@@ -55,14 +64,19 @@ class Addvert extends Module
 
     public function install()
     {
+        if (!function_exists('curl_init'))
+            throw new Exception('Addvert needs the CURL PHP extension.');
+
         Configuration::updateValue('ADDVERT_ECOMMERCE_ID', $this->ecommerceId);
         Configuration::updateValue('ADDVERT_SECRET_KEY', $this->secretKey);
         Configuration::updateValue('ADDVERT_BUTTON_LAYOUT', $this->buttonLayout);
 
-        return (parent::install()
+        return parent::install()
             && $this->registerHook('header')
             && $this->registerHook('productActions')
-            && $this->registerHook('orderConfirmation'));
+            && $this->registerHook('newOrder')
+            && $this->registerHook('paymentConfirm')
+            && $this->create_table();
     }
 
     public function uninstall()
@@ -70,6 +84,8 @@ class Addvert extends Module
         Configuration::deleteByName('ADDVERT_ECOMMERCE_ID');
         Configuration::deleteByName('ADDVERT_SECRET_KEY');
         Configuration::deleteByName('ADDVERT_BUTTON_LAYOUT');
+        $this->delete_table();
+
         return parent::uninstall();
     }
 
@@ -78,6 +94,10 @@ class Addvert extends Module
         $this->ecommerceId = htmlentities(Configuration::get('ADDVERT_ECOMMERCE_ID'), ENT_QUOTES, 'UTF-8');
         $this->secretKey = htmlentities(Configuration::get('ADDVERT_SECRET_KEY'), ENT_QUOTES, 'UTF-8');
         $this->buttonLayout = htmlentities(Configuration::get('ADDVERT_BUTTON_LAYOUT'), ENT_QUOTES, 'UTF-8');
+
+        $this->debug = Configuration::get('ADDVERT_DEBUG') == 1;
+        if($this->debug)
+            $this->logger = new Addvert\Logger(_PS_ROOT_DIR_ . '/log/addvert.log');
 
         // Retrocompatibility
         $this->initContext();
@@ -103,6 +123,9 @@ class Addvert extends Module
                 Configuration::updateValue('ADDVERT_BUTTON_LAYOUT', $buttonLayout);
             elseif (Shop::getContext() == Shop::CONTEXT_SHOP || Shop::getContext() == Shop::CONTEXT_GROUP)
                 Configuration::deleteFromContext('ADDVERT_BUTTON_LAYOUT');
+
+            $debug = (int) Tools::getValue('debug');
+            Configuration::updateValue('ADDVERT_DEBUG', $debug);
 
             $this->initialize();
         }
@@ -134,6 +157,12 @@ class Addvert extends Module
 					    <option value="standard"' . ($this->buttonLayout == 'standard' ? ' selected="selected"' : '') . '>Standard</option>
 					    <option value="small"' . ($this->buttonLayout == 'small' ? ' selected="selected"' : '') . '>Small</option>
 					</select>
+				</div>
+				<br class="clear"/>
+				<label for="debug">'.$this->l('Debug').'</label>
+				<div class="margin-form">
+                    <input id="debug" type="checkbox" name="debug" value="1"'
+                        .($this->debug ? ' checked' : '').' />
 				</div>
 				<br class="clear"/>
 				<div class="margin-form">
@@ -200,11 +229,32 @@ class Addvert extends Module
 
     public function hookHeader()
     {
-        if ($this->_isProductPage()) {
-            return $this->getMetaHtml();
-        } else {
-            return '';
-        }
+        if( isset($_GET[self::TOKEN]) )                // expires in 31 days
+            setcookie(self::TOKEN, $_GET[self::TOKEN], time()+2678400);
+
+        return $this->_isProductPage() ? $this->getMetaHtml() : '';
+    }
+
+    /**
+     * params: cart, order, customer, currency, orderStatus
+     */
+    public function hookNewOrder($params)
+    {
+        if(!$this->active)
+            return;
+
+        $this->attach_token($params['order']->id);
+
+    }
+    /**
+     * params: orderStatus, id_order
+     */
+    public function hookPaymentConfirm($params)
+    {
+        if(!$this->active)
+            return;
+
+        $this->notify_addvert((int) $params['id_order']);
     }
 
     public function getButtonHtml()
@@ -224,19 +274,6 @@ class Addvert extends Module
     public function hookProductActions()
     {
         return $this->getButtonHtml();
-    }
-
-    public function getOrderTrakingHtml($orderId, $orderTotal)
-    {
-        $url = sprintf(self::SCRIPT_BASE_URL . '/api/order/prep_total?ecommerce_id=%s&secret=%s&tracking_id=%s&total=%s', $this->ecommerceId, $this->secretKey, $orderId, $orderTotal);
-        $orderKey = Tools::file_get_contents($url);
-
-        return '<script src="' . self::SCRIPT_BASE_URL . '/api/order/send_total?key=' . $orderKey . '"></script>';
-    }
-
-    public function hookOrderConfirmation($params)
-    {
-        return $this->getOrderTrakingHtml($params['objOrder']->id, $params['total_to_pay']);
     }
 
     public function escapeHtml($data, $allowedTags = null)
@@ -302,5 +339,92 @@ class Addvert extends Module
 
             return $default_category;
         }
+    }
+
+    protected function create_table()
+    {
+        $tbl = $this->table();
+        $q = "CREATE TABLE IF NOT EXISTS $tbl("
+           .' order_id INT NOT NULL,'
+           .' token CHAR(32) NOT NULL,'
+           .' PRIMARY KEY (`order_id`))';
+        return $this->query_exec($q);
+    }
+    protected function delete_table()
+    {
+        return $this->query_exec('DROP TABLE IF EXISTS ' . $this->table());
+    }
+
+    protected function attach_token($order_id) {
+        $tbl = $this->table();
+        $order_id = (int) $order_id;
+        $token = pSQL($_COOKIE[self::TOKEN]);
+
+        $q = "INSERT INTO $tbl(order_id, token) VALUES($order_id, '$token')";
+        $res = $this->query_exec($q);
+
+        $this->log("Token `$token` attached to order `$order_id`? "
+                    . var_export($res, true));
+
+        return $res;
+    }
+
+    protected function notify_addvert($order_id) {
+        $token = $this->get_token($order_id);
+
+        if(!$token) // it's not an addvert's commission
+            return;
+
+        $order = new Order($order_id);
+        $url = self::ADDVERT_API .'?'. join('&', array(
+            'token='. $token,
+            'total='. urlencode($order->total_products_wt),
+            'secret='. urlencode($this->secretKey),
+            'tracking_id='. $order_id,
+            'ecommerce_id='. $this->ecommerceId,
+        ));
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+
+        $resp = curl_exec($ch);
+        if($resp === false)
+            $this->log('cURL error #'. curl_errno($ch)."\n". curl_error($ch));
+        else
+            $this->log("cURL response:\n$resp");
+
+        curl_close($ch);
+    }
+
+    protected function get_token($order_id) {
+        $q = 'SELECT token FROM '. $this->table()
+           .' WHERE order_id = '. (int) $order_id
+           .' LIMIT 1';
+        $r = (array) $this->query_result($q);
+
+        return $r['token'];
+    }
+
+    private function table()
+    {
+        return _DB_PREFIX_ . self::TABLE;
+    }
+    private function query_exec($q)
+    {
+        return $this->db()->Execute($q);
+    }
+    private function query_result($q) {
+        $r = $this->db()->ExecuteS($q);
+        return is_array($r) ? $r[0] : $r;
+    }
+    private function db() {
+        return DB::getInstance(_PS_USE_SQL_SLAVE_);
+    }
+
+    protected function log($msg) {
+        if($this->debug)
+            $this->logger->log($msg);
+        return $this;
     }
 }
