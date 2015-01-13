@@ -241,7 +241,6 @@ class Addvert extends Module
             return;
 
         $this->attach_token($params['order']->id);
-
     }
     /**
      * params: orderStatus, id_order
@@ -363,6 +362,8 @@ class Addvert extends Module
         $this->log("Token `$token` attached to order `$order_id`? "
                     . var_export($res, true));
 
+        // remove cookie
+        setcookie(self::TOKEN, '', 1);
         return $res;
     }
 
