@@ -7,7 +7,7 @@
 if (!defined('_PS_VERSION_'))
     exit;
 
-if( !defined('_PS_USE_SQL_SLAVE_') )
+if ( !defined('_PS_USE_SQL_SLAVE_') )
     define('_PS_USE_SQL_SLAVE_', 0);
 
 require __DIR__ .'/logger.php';
@@ -38,7 +38,8 @@ class Addvert extends Module
         if ($id_product = (int)Tools::getValue('id_product')) {
             $product = new Product($id_product, true, $this->context->language->id);
 
-            if (!Validate::isLoadedObject($product)) $product = null;
+            if (!Validate::isLoadedObject($product))
+                $product = null;
         }
 
         return $product;
@@ -51,11 +52,15 @@ class Addvert extends Module
         $this->version = '1.2';
         $this->author = 'Addvert.it';
         $this->need_instance = 0;
+        $this->ps_versions_compliancy = array(
+            'min' => '1.3',
+            'max' => '1.6'
+        );
 
         parent::__construct();
 
         $this->displayName = $this->l('Addvert integration');
-        $this->description = $this->l('PrestaShop Module to integrate Addvert affiliation platform.');
+        $this->description = $this->l('Integrate Addvert affiliation platform.');
 
         $this->confirmUninstall = $this->l('Are you sure you want to uninstall?');
 
@@ -81,6 +86,7 @@ class Addvert extends Module
         Configuration::deleteByName('ADDVERT_ECOMMERCE_ID');
         Configuration::deleteByName('ADDVERT_SECRET_KEY');
         Configuration::deleteByName('ADDVERT_BUTTON_LAYOUT');
+        Configuration::deleteByName('ADDVERT_DEBUG');
         $this->delete_table();
 
         return parent::uninstall();
@@ -93,7 +99,7 @@ class Addvert extends Module
         $this->buttonLayout = htmlentities(Configuration::get('ADDVERT_BUTTON_LAYOUT'), ENT_QUOTES, 'UTF-8');
 
         $this->debug = Configuration::get('ADDVERT_DEBUG') == 1;
-        if($this->debug)
+        if ($this->debug)
             $this->logger = new Addvert\Logger(_PS_ROOT_DIR_ . '/log/addvert.log');
 
         // Retrocompatibility
@@ -134,45 +140,45 @@ class Addvert extends Module
     {
         $this->postProcess();
         $output = '
-		<form action="'.Tools::safeOutput($_SERVER['REQUEST_URI']).'" method="post" enctype="multipart/form-data">
-			<fieldset>
-				<legend>'.$this->l('Addvert integration configuration').'</legend>
-				<br/><br/>
-				<label for="ecommerce_id">'.$this->l('Ecommerce ID').'</label>
-				<div class="margin-form">
-					<input id="ecommerce_id" type="text" name="ecommerce_id" value="'.$this->ecommerceId.'" style="width:250px" />
-				</div>
-				<br class="clear"/>
-				<label for="secret_key">'.$this->l('Secret key').'</label>
-				<div class="margin-form">
-					<input id="secret_key" type="text" name="secret_key" value="'.$this->secretKey.'" style="width:250px" />
-				</div>
-				<br class="clear"/>
-				<label for="button_layout">'.$this->l('Button layout').'</label>
-				<div class="margin-form">
-					<select id="secret_key" name="button_layout">
-					    <option value="standard"' . ($this->buttonLayout == 'standard' ? ' selected="selected"' : '') . '>Standard</option>
-					    <option value="small"' . ($this->buttonLayout == 'small' ? ' selected="selected"' : '') . '>Small</option>
-					</select>
-				</div>
-				<br class="clear"/>
-				<label for="debug">'.$this->l('Debug').'</label>
-				<div class="margin-form">
+        <form action="'.Tools::safeOutput($_SERVER['REQUEST_URI']).'" method="post" enctype="multipart/form-data">
+            <fieldset>
+                <legend>'.$this->l('Addvert integration configuration').'</legend>
+                <br/><br/>
+                <label for="ecommerce_id">'.$this->l('Ecommerce ID').'</label>
+                <div class="margin-form">
+                    <input id="ecommerce_id" type="text" name="ecommerce_id" value="'.$this->ecommerceId.'" style="width:250px" />
+                </div>
+                <br class="clear"/>
+                <label for="secret_key">'.$this->l('Secret key').'</label>
+                <div class="margin-form">
+                    <input id="secret_key" type="text" name="secret_key" value="'.$this->secretKey.'" style="width:250px" />
+                </div>
+                <br class="clear"/>
+                <label for="button_layout">'.$this->l('Button layout').'</label>
+                <div class="margin-form">
+                    <select id="secret_key" name="button_layout">
+                        <option value="standard"' . ($this->buttonLayout == 'standard' ? ' selected="selected"' : '') . '>Standard</option>
+                        <option value="small"' . ($this->buttonLayout == 'small' ? ' selected="selected"' : '') . '>Small</option>
+                    </select>
+                </div>
+                <br class="clear"/>
+                <label for="debug">'.$this->l('Debug').'</label>
+                <div class="margin-form">
                     <input id="debug" type="checkbox" name="debug" value="1"'
                         .($this->debug ? ' checked' : '').' />
-				</div>
-				<br class="clear"/>
-				<div class="margin-form">
-					<input class="button" type="submit" name="submitAddvertConf" value="'.$this->l('Validate').'"/>
-				</div>
-				<br class="clear"/>
-			</fieldset>
-		</form>';
-        return $output;
+                </div>
+                <br class="clear"/>
+                <div class="margin-form">
+                    <input class="button" type="submit" name="submitAddvertConf" value="'.$this->l('Save').'"/>
+                </div>
+                <br class="clear"/>
+            </fieldset>
+            </form>';
+                    return $output;
     }
 
     /**
-     * Costruisce i meta per l'head della scheda prodotto
+     * Builds addvert meta on product's head
      */
     public function getMetaHtml()
     {
@@ -181,7 +187,7 @@ class Addvert extends Module
         if ($this->_isProductPage()) {
             $product = $this->_getProduct();
 
-            if(is_null($product) || $product == false)
+            if (is_null($product) || $product == false)
                 return $metaHtml;
 
             $metas = array(
@@ -197,7 +203,7 @@ class Addvert extends Module
             if (isset($image['id_image'])) {
                 $img = $this->context->link->getImageLink($product->link_rewrite, "$product->id-$image[id_image]");
                 // patch prestashop 1.3.4 (outletbicocca)
-                if($img[0] === '/')
+                if ($img[0] === '/')
                     $img = _PS_BASE_URL_ . $img;
 
                 $metas[] = array('property' => 'og:image', 'content' => $img);
@@ -226,7 +232,7 @@ class Addvert extends Module
 
     public function hookHeader()
     {
-        if( isset($_GET[self::TOKEN]) )                // expires in 31 days
+        if (isset($_GET[self::TOKEN]))                 // expires in 31 days
             setcookie(self::TOKEN, $_GET[self::TOKEN], time()+2678400);
 
         return $this->_isProductPage() ? $this->getMetaHtml() : '';
@@ -237,7 +243,7 @@ class Addvert extends Module
      */
     public function hookNewOrder($params)
     {
-        if(!$this->active)
+        if (!$this->active)
             return;
 
         $this->attach_token($params['order']->id);
@@ -247,7 +253,7 @@ class Addvert extends Module
      */
     public function hookPaymentConfirm($params)
     {
-        if(!$this->active)
+        if (!$this->active)
             return;
 
         $this->notify_addvert((int) $params['id_order']);
@@ -264,7 +270,7 @@ class Addvert extends Module
     })();
 </script>
 <div class="addvert-btn" data-width="450" data-layout="' . $this->buttonLayout . '"></div>
-        ';
+';
     }
 
     public function hookProductActions()
@@ -318,7 +324,7 @@ class Addvert extends Module
             $this->context->link = $link;
             $this->context->language = new Language($cookie->id_lang);
         }
-        elseif( empty($this->context) ) {
+        elseif ( empty($this->context) ) {
             $this->context = Context::getContext();
         }
     }
@@ -337,7 +343,12 @@ class Addvert extends Module
         }
     }
 
-    protected function create_table()
+    /**
+     * Create table we need for order tracking.
+     *
+     * NB: this is made public so we can use it in the upgrade
+     */
+    public function create_table()
     {
         $tbl = $this->table();
         $q = "CREATE TABLE IF NOT EXISTS $tbl("
@@ -351,7 +362,8 @@ class Addvert extends Module
         return $this->query_exec('DROP TABLE IF EXISTS ' . $this->table());
     }
 
-    protected function attach_token($order_id) {
+    protected function attach_token($order_id)
+    {
         $tbl = $this->table();
         $order_id = (int) $order_id;
         $token = pSQL($_COOKIE[self::TOKEN]);
@@ -367,10 +379,11 @@ class Addvert extends Module
         return $res;
     }
 
-    protected function notify_addvert($order_id) {
+    protected function notify_addvert($order_id)
+    {
         $token = $this->get_token($order_id);
 
-        if(!$token) // it's not an addvert's commission
+        if (!$token) // it isn't an addvert's commission
             return;
 
         $order = new Order($order_id);
@@ -381,14 +394,14 @@ class Addvert extends Module
             'tracking_id='. $order_id,
             'ecommerce_id='. $this->ecommerceId,
         ));
-        
-        if( function_exists('curl_init') ) {
+
+        if ( function_exists('curl_init') ) {
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
             $resp = curl_exec($ch);
-            if($resp === false)
+            if ($resp === false)
                 $this->log('cURL error #'. curl_errno($ch)."\n". curl_error($ch));
             curl_close($ch);
         }
@@ -399,7 +412,8 @@ class Addvert extends Module
         $this->log("Response:\n$resp");
     }
 
-    protected function get_token($order_id) {
+    protected function get_token($order_id)
+    {
         $q = 'SELECT token FROM '. $this->table()
            .' WHERE order_id = '. (int) $order_id
            .' LIMIT 1';
@@ -416,16 +430,19 @@ class Addvert extends Module
     {
         return $this->db()->Execute($q);
     }
-    private function query_result($q) {
+    private function query_result($q)
+    {
         $r = $this->db()->ExecuteS($q);
         return is_array($r) ? $r[0] : $r;
     }
-    private function db() {
+    private function db()
+    {
         return DB::getInstance(_PS_USE_SQL_SLAVE_);
     }
 
-    protected function log($msg) {
-        if($this->debug)
+    protected function log($msg)
+    {
+        if ($this->debug)
             $this->logger->log($msg);
         return $this;
     }
