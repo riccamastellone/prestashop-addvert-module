@@ -52,6 +52,7 @@ class Addvert extends Module
         $this->version = '1.2';
         $this->author = 'Addvert.it';
         $this->need_instance = 0;
+        $this->module_key = '678a5aeaa26a7ef38f3845ff9ff83d85';
         $this->ps_versions_compliancy = array(
             'min' => '1.3',
             'max' => '1.6'
@@ -65,6 +66,8 @@ class Addvert extends Module
         $this->confirmUninstall = $this->l('Are you sure you want to uninstall?');
 
         $this->initialize();
+
+
     }
 
     public function install()
@@ -94,16 +97,23 @@ class Addvert extends Module
 
     protected function initialize()
     {
+        // Retrocompatibility
+        $this->initContext();
+
         $this->ecommerceId = htmlentities(Configuration::get('ADDVERT_ECOMMERCE_ID'), ENT_QUOTES, 'UTF-8');
         $this->secretKey = htmlentities(Configuration::get('ADDVERT_SECRET_KEY'), ENT_QUOTES, 'UTF-8');
         $this->buttonLayout = htmlentities(Configuration::get('ADDVERT_BUTTON_LAYOUT'), ENT_QUOTES, 'UTF-8');
 
         $this->debug = Configuration::get('ADDVERT_DEBUG') == 1;
-        if ($this->debug)
-            $this->logger = new Addvert\Logger(_PS_ROOT_DIR_ . '/log/addvert.log');
+        if ($this->debug) {
+            $path = _PS_ROOT_DIR_ . '/log/addvert.log';
 
-        // Retrocompatibility
-        $this->initContext();
+            // ps v13
+            if( !is_writable($path) ) {
+                $path = _PS_MODULE_DIR_ . "$this->name/$this->name.log";
+            }
+            $this->logger = new Addvert\Logger($path);
+        }
     }
 
     public function postProcess()
@@ -174,7 +184,7 @@ class Addvert extends Module
                 <br class="clear"/>
             </fieldset>
             </form>';
-                    return $output;
+            return $output;
     }
 
     /**
@@ -183,6 +193,8 @@ class Addvert extends Module
     public function getMetaHtml()
     {
         $metaHtml = '';
+
+        $this->addCSS('addvert.css');
 
         if ($this->_isProductPage()) {
             $product = $this->_getProduct();
@@ -248,6 +260,7 @@ class Addvert extends Module
 
         $this->attach_token($params['order']->id);
     }
+
     /**
      * params: orderStatus, id_order
      */
@@ -406,6 +419,7 @@ class Addvert extends Module
             curl_close($ch);
         }
         else {
+            $this->log('There\'s no cURL, try with good old file_get_contents...');
             $resp = file_get_contents($url);
         }
 
@@ -444,6 +458,16 @@ class Addvert extends Module
     {
         if ($this->debug)
             $this->logger->log($msg);
+        return $this;
+    }
+
+    protected function addCSS($fname) {
+        $path = $this->_path . $fname; 
+        if( isset($this->context->controller) )
+            $this->context->controller->addCSS($path, 'all');
+        elseif( method_exists(array('Tools', 'addClass')) )
+            Tools::addCSS($path);
+
         return $this;
     }
 }
