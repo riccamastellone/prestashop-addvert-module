@@ -10,7 +10,8 @@ class Logger {
 
     public function log($msg) {
         $now = date('d-m-Y H:i:s');
-        fwrite($this->fp, "$now § $msg\n");
+        $ip = $_SERVER['REMOTE_ADDR'];
+        fwrite($this->fp, "$now § $ip § $msg\n");
         fwrite($this->fp, "-------------------------------------------------\n");
         return $this;
     }

@@ -31,25 +31,11 @@ class Addvert extends Module
 
     const ADDVERT_TYPE = 'product';
 
-    protected function _getProduct()
-    {
-        $product = null;
-
-        if ($id_product = (int)Tools::getValue('id_product')) {
-            $product = new Product($id_product, true, $this->context->language->id);
-
-            if (!Validate::isLoadedObject($product))
-                $product = null;
-        }
-
-        return $product;
-    }
-
     public function __construct()
     {
         $this->name = 'addvert';
         $this->tab = 'advertising_marketing';
-        $this->version = '1.2';
+        $this->version = '1.2.1';
         $this->author = 'Addvert.it';
         $this->need_instance = 0;
         $this->module_key = '678a5aeaa26a7ef38f3845ff9ff83d85';
@@ -66,8 +52,6 @@ class Addvert extends Module
         $this->confirmUninstall = $this->l('Are you sure you want to uninstall?');
 
         $this->initialize();
-
-
     }
 
     public function install()
@@ -75,6 +59,7 @@ class Addvert extends Module
         Configuration::updateValue('ADDVERT_ECOMMERCE_ID', $this->ecommerceId);
         Configuration::updateValue('ADDVERT_SECRET_KEY', $this->secretKey);
         Configuration::updateValue('ADDVERT_BUTTON_LAYOUT', $this->buttonLayout);
+        Configuration::updateValue('ADDVERT_DEBUG', 1);
 
         return parent::install()
             && $this->registerHook('header')
@@ -183,8 +168,8 @@ class Addvert extends Module
                 </div>
                 <br class="clear"/>
             </fieldset>
-            </form>';
-            return $output;
+        </form>';
+        return $output;
     }
 
     /**
@@ -214,7 +199,7 @@ class Addvert extends Module
             $image = Product::getCover($product->id);
             if (isset($image['id_image'])) {
                 $img = $this->context->link->getImageLink($product->link_rewrite, "$product->id-$image[id_image]");
-                // patch prestashop 1.3.4 (outletbicocca)
+                // patch prestashop 1.3.4
                 if ($img[0] === '/')
                     $img = _PS_BASE_URL_ . $img;
 
@@ -242,10 +227,27 @@ class Addvert extends Module
         return $metaHtml;
     }
 
+    protected function _getProduct()
+    {
+        $product = null;
+
+        if ($id_product = (int)Tools::getValue('id_product')) {
+            $product = new Product($id_product, true, $this->context->language->id);
+
+            if (!Validate::isLoadedObject($product))
+                $product = null;
+        }
+
+        return $product;
+    }
+
+
     public function hookHeader()
     {
-        if (isset($_GET[self::TOKEN]))                 // expires in 31 days
+        if (isset($_GET[self::TOKEN])) {               // expires in 31 days
             setcookie(self::TOKEN, $_GET[self::TOKEN], time()+2678400);
+            $this->log('Token GET '. $_GET[self::TOKEN]);
+        }
 
         return $this->_isProductPage() ? $this->getMetaHtml() : '';
     }
@@ -274,16 +276,18 @@ class Addvert extends Module
 
     public function getButtonHtml()
     {
-        return '
+        $src = json_encode($this->getScriptUrl());
+        return <<<HTML
 <script type="text/javascript">
     (function() {
-        var js = document.createElement(\'script\'); js.type = \'text/javascript\'; js.async = true;
-        js.src = \'' . $this->getScriptUrl() . '\';
-        var s = document.getElementsByTagName(\'script\')[0]; s.parentNode.insertBefore(js, s);
+        var js = document.createElement('script');
+        js.type = 'text/javascript'; js.async = true;
+        js.src = $src;
+        var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(js, s);
     })();
 </script>
-<div class="addvert-btn" data-width="450" data-layout="' . $this->buttonLayout . '"></div>
-';
+<div class="addvert-btn" data-width="450" data-layout="$this->buttonLayout"></div>
+HTML;
     }
 
     public function hookProductActions()
@@ -358,10 +362,8 @@ class Addvert extends Module
 
     /**
      * Create table we need for order tracking.
-     *
-     * NB: this is made public so we can use it in the upgrade
      */
-    public function create_table()
+    protected function create_table()
     {
         $tbl = $this->table();
         $q = "CREATE TABLE IF NOT EXISTS $tbl("
@@ -377,6 +379,11 @@ class Addvert extends Module
 
     protected function attach_token($order_id)
     {
+        if( empty($_COOKIE[self::TOKEN]) ) {
+            $this->log('No token detected');
+            return;
+        }
+
         $tbl = $this->table();
         $order_id = (int) $order_id;
         $token = pSQL($_COOKIE[self::TOKEN]);
@@ -436,7 +443,7 @@ class Addvert extends Module
         return $r['token'];
     }
 
-    private function table()
+    public function table()
     {
         return _DB_PREFIX_ . self::TABLE;
     }
@@ -465,7 +472,7 @@ class Addvert extends Module
         $path = $this->_path . $fname; 
         if( isset($this->context->controller) )
             $this->context->controller->addCSS($path, 'all');
-        elseif( method_exists(array('Tools', 'addClass')) )
+        elseif( method_exists('Tools', 'addClass') )
             Tools::addCSS($path);
 
         return $this;
