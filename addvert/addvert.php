@@ -20,13 +20,11 @@ class Addvert extends Module
     const ADDVERT_API = 'https://addvert.it/api/order/send_order';
 
     public $ecommerceId;
-
     public $secretKey;
-
     public $buttonLayout;
+    public $noCounter;
 
     protected $_tags = null;
-
     protected $_categories = null;
 
     const ADDVERT_TYPE = 'product';
@@ -35,7 +33,7 @@ class Addvert extends Module
     {
         $this->name = 'addvert';
         $this->tab = 'advertising_marketing';
-        $this->version = '1.2.1';
+        $this->version = '1.2.2';
         $this->author = 'Addvert.it';
         $this->need_instance = 0;
         $this->module_key = '678a5aeaa26a7ef38f3845ff9ff83d85';
@@ -59,6 +57,7 @@ class Addvert extends Module
         Configuration::updateValue('ADDVERT_ECOMMERCE_ID', $this->ecommerceId);
         Configuration::updateValue('ADDVERT_SECRET_KEY', $this->secretKey);
         Configuration::updateValue('ADDVERT_BUTTON_LAYOUT', $this->buttonLayout);
+        Configuration::updateValue('ADDVERT_NO_COUNTER', 0);
         Configuration::updateValue('ADDVERT_DEBUG', 1);
 
         return parent::install()
@@ -74,6 +73,7 @@ class Addvert extends Module
         Configuration::deleteByName('ADDVERT_ECOMMERCE_ID');
         Configuration::deleteByName('ADDVERT_SECRET_KEY');
         Configuration::deleteByName('ADDVERT_BUTTON_LAYOUT');
+        Configuration::deleteByName('ADDVERT_NO_COUNTER');
         Configuration::deleteByName('ADDVERT_DEBUG');
         $this->delete_table();
 
@@ -88,8 +88,9 @@ class Addvert extends Module
         $this->ecommerceId = htmlentities(Configuration::get('ADDVERT_ECOMMERCE_ID'), ENT_QUOTES, 'UTF-8');
         $this->secretKey = htmlentities(Configuration::get('ADDVERT_SECRET_KEY'), ENT_QUOTES, 'UTF-8');
         $this->buttonLayout = htmlentities(Configuration::get('ADDVERT_BUTTON_LAYOUT'), ENT_QUOTES, 'UTF-8');
+        $this->noCounter = (bool) Configuration::get('ADDVERT_NO_COUNTER');
 
-        $this->debug = Configuration::get('ADDVERT_DEBUG') == 1;
+        $this->debug = (bool) Configuration::get('ADDVERT_DEBUG');
         if ($this->debug) {
             $path = _PS_ROOT_DIR_ . '/log/addvert.log';
 
@@ -122,8 +123,11 @@ class Addvert extends Module
             elseif (Shop::getContext() == Shop::CONTEXT_SHOP || Shop::getContext() == Shop::CONTEXT_GROUP)
                 Configuration::deleteFromContext('ADDVERT_BUTTON_LAYOUT');
 
-            $debug = (int) Tools::getValue('debug');
-            Configuration::updateValue('ADDVERT_DEBUG', $debug);
+            Configuration::updateValue('ADDVERT_NO_COUNTER',
+                                       (int) Tools::getValue('noctr'));
+
+            Configuration::updateValue('ADDVERT_DEBUG',
+                                       (int) Tools::getValue('debug'));
 
             $this->initialize();
         }
@@ -134,6 +138,17 @@ class Addvert extends Module
     public function getContent()
     {
         $this->postProcess();
+        $layouts = array(
+            'standard',
+            'small',
+            'smallest',
+            'circle',
+            'squared',
+            'gray-circle',
+            'gray',
+            'gray-simple',
+        );
+
         $output = '
         <form action="'.Tools::safeOutput($_SERVER['REQUEST_URI']).'" method="post" enctype="multipart/form-data">
             <fieldset>
@@ -151,10 +166,21 @@ class Addvert extends Module
                 <br class="clear"/>
                 <label for="button_layout">'.$this->l('Button layout').'</label>
                 <div class="margin-form">
-                    <select id="secret_key" name="button_layout">
-                        <option value="standard"' . ($this->buttonLayout == 'standard' ? ' selected="selected"' : '') . '>Standard</option>
-                        <option value="small"' . ($this->buttonLayout == 'small' ? ' selected="selected"' : '') . '>Small</option>
-                    </select>
+                    <select name="button_layout">';
+
+        foreach($layouts as $l) {
+            $output .= '<option value="'. $l .'"'
+                    . ($l === $this->buttonLayout ? ' selected' : '')
+                    . ">$l</option>";
+        }
+
+        $output .= '</select>
+                </div>
+                <br class="clear"/>
+                <label for="noctr">'.$this->l('Disable counter').'</label>
+                <div class="margin-form">
+                    <input id="noctr" type="checkbox" name="noctr" value="1"'
+                        .($this->noCounter ? 'checked' : ''). ' />
                 </div>
                 <br class="clear"/>
                 <label for="debug">'.$this->l('Debug').'</label>
@@ -169,6 +195,7 @@ class Addvert extends Module
                 <br class="clear"/>
             </fieldset>
         </form>';
+
         return $output;
     }
 
@@ -277,6 +304,8 @@ class Addvert extends Module
     public function getButtonHtml()
     {
         $src = json_encode($this->getScriptUrl());
+        $noctr = ($this->noCounter) ? ' data-no-counter' : '';
+
         return <<<HTML
 <script type="text/javascript">
     (function() {
@@ -286,7 +315,7 @@ class Addvert extends Module
         var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(js, s);
     })();
 </script>
-<div class="addvert-btn" data-width="450" data-layout="$this->buttonLayout"></div>
+<div class="addvert-btn" data-width="450" data-layout="$this->buttonLayout"$noctr></div>
 HTML;
     }
 
