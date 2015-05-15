@@ -16,8 +16,9 @@ class Addvert extends Module
 {
     const TOKEN = 'addvert_token';
     const TABLE = 'addvert_order_token';
-    const SCRIPT_BASE_URL = 'https://addvert.it';
+    const SCRIPT_BASE_URL = '//addvert.it';
     const ADDVERT_API = 'https://addvert.it/api/order/send_order';
+    const LAYOUTS_URL = 'http://addvert.it/api/button/layouts';
 
     public $ecommerceId;
     public $secretKey;
@@ -138,16 +139,7 @@ class Addvert extends Module
     public function getContent()
     {
         $this->postProcess();
-        $layouts = array(
-            'standard',
-            'small',
-            'smallest',
-            'circle',
-            'squared',
-            'gray-circle',
-            'gray',
-            'gray-simple',
-        );
+        $layouts = $this->button_layouts();
 
         $output = '
         <form action="'.Tools::safeOutput($_SERVER['REQUEST_URI']).'" method="post" enctype="multipart/form-data">
@@ -304,7 +296,7 @@ class Addvert extends Module
     public function getButtonHtml()
     {
         $src = json_encode($this->getScriptUrl());
-        $noctr = ($this->noCounter) ? ' data-no-counter' : '';
+        $noctr = ($this->noCounter) ? ' data-no-counter="1"' : '';
 
         return <<<HTML
 <script type="text/javascript">
@@ -443,7 +435,23 @@ HTML;
             'tracking_id='. $order_id,
             'ecommerce_id='. $this->ecommerceId,
         ));
+        $resp = $this->get_remote($url);
 
+        $this->log("Response:\n$resp");
+    }
+
+    protected function button_layouts()
+    {
+        $json = $this->get_remote(self::LAYOUTS_URL);
+        if( empty($json) )
+            return array();
+
+        $json = json_decode($json, true);
+        return $json['list'];
+    }
+
+    protected function get_remote($url)
+    {
         if ( function_exists('curl_init') ) {
             $ch = curl_init($url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -459,7 +467,7 @@ HTML;
             $resp = file_get_contents($url);
         }
 
-        $this->log("Response:\n$resp");
+        return $resp;
     }
 
     protected function get_token($order_id)
